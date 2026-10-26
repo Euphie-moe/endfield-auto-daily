@@ -227,6 +227,7 @@ async function runAccount(accountToken, accountIndex) {
     }
   } catch (err) {
     log('error', `Account ${accountIndex}:`, err.message)
+    console.error(err.cause)
   }
 }
 
