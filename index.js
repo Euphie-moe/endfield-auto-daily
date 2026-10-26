@@ -26,6 +26,17 @@ let hasErrors = false
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
+async function fetchWithRetry(url, options) {
+  for (let i = 1; i <= 3; i++) {
+    try {
+      return await fetch(url, options)
+    } catch (err) {
+      if (i === 3) throw err
+      await sleep(5000)
+    }
+  }
+}
+
 function log(type, ...data) {
   console[type](...data)
   switch (type) {
@@ -44,14 +55,14 @@ async function performOAuthFlow(accountToken) {
 
   // Step 1: basic info (validate token)
   const infoUrl = `${BASIC_INFO_URL}?token=${encodeURIComponent(accountToken)}`
-  const infoRes = await fetch(infoUrl, { method: 'GET', headers: { 'Accept': 'application/json' } })
+  const infoRes = await fetchWithRetry(infoUrl, { method: 'GET', headers: { 'Accept': 'application/json' } })
   const infoData = await infoRes.json()
   if (infoData.status !== 0) {
     throw new Error(`OAuth Step 1 Failed: ${infoData.msg || JSON.stringify(infoData)}`)
   }
 
   // Step 2: grant OAuth code
-  const grantRes = await fetch(OAUTH_GRANT_URL, {
+  const grantRes = await fetchWithRetry(OAUTH_GRANT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify({ token: accountToken, appCode: APP_CODE, type: 0 })
@@ -62,7 +73,7 @@ async function performOAuthFlow(accountToken) {
   }
 
   // Step 3: exchange code for cred (+ token)
-  const credRes = await fetch(GENERATE_CRED_URL, {
+  const credRes = await fetchWithRetry(GENERATE_CRED_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -129,7 +140,7 @@ async function getPlayerRoles(cred, salt) {
   if (!sign) throw new Error('Missing salt for V2 signing (binding required)')
   headers['sign'] = sign
 
-  const res = await fetch(BINDING_URL, { method: 'GET', headers })
+  const res = await fetchWithRetry(BINDING_URL, { method: 'GET', headers })
   const json = await res.json()
   if (json.code !== 0) throw new Error(json.message || `Binding API error: ${json.code}`)
 
@@ -155,7 +166,7 @@ async function getPlayerRoles(cred, salt) {
 }
 
 async function checkAttendance(headers) {
-  const res = await fetch(ATTENDANCE_URL, { method: 'GET', headers })
+  const res = await fetchWithRetry(ATTENDANCE_URL, { method: 'GET', headers })
   const json = await res.json()
   if (json.code !== 0) throw new Error(json.message || `Attendance status check failed: ${json.code}`)
   return {
@@ -165,7 +176,7 @@ async function checkAttendance(headers) {
 }
 
 async function claimAttendance(headers) {
-  const res = await fetch(ATTENDANCE_URL, { method: 'POST', headers, body: null })
+  const res = await fetchWithRetry(ATTENDANCE_URL, { method: 'POST', headers, body: null })
   const json = await res.json()
   if (json.code !== 0) throw new Error(json.message || `Claim failed: ${json.code}`)
   const rewards = []
